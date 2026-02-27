@@ -228,6 +228,29 @@ func registerTools(server *mcp.Server, appServer *AppServer) {
 		}),
 	)
 
+
+	// 工具: 存草稿
+	mcp.AddTool(server,
+		&mcp.Tool{
+			Name:        "save_draft_content",
+			Description: "将图文内容保存为小红书草稿，不立即发布，可在创作者中心手动发布",
+			Annotations: &mcp.ToolAnnotations{
+				Title:           "Save Draft Content",
+				DestructiveHint: boolPtr(false),
+			},
+		},
+		withPanicRecovery("save_draft_content", func(ctx context.Context, req *mcp.CallToolRequest, args PublishContentArgs) (*mcp.CallToolResult, any, error) {
+			argsMap := map[string]interface{}{
+				"title":   args.Title,
+				"content": args.Content,
+				"images":  convertStringsToInterfaces(args.Images),
+				"tags":    convertStringsToInterfaces(args.Tags),
+			}
+			result := appServer.handleSaveDraftContent(ctx, argsMap)
+			return convertToMCPResult(result), nil, nil
+		}),
+	)
+
 	// 工具 5: 获取Feed列表
 	mcp.AddTool(server,
 		&mcp.Tool{

@@ -22,6 +22,7 @@ type PublishImageContent struct {
 	Tags         []string
 	ImagePaths   []string
 	ScheduleTime *time.Time // 定时发布时间，nil 表示立即发布
+	SaveAsDraft  bool       // true 表示存草稿，false 表示立即发布
 }
 
 type PublishAction struct {
@@ -84,7 +85,7 @@ func (p *PublishAction) Publish(ctx context.Context, content PublishImageContent
 
 	logrus.Infof("发布内容: title=%s, images=%v, tags=%v, schedule=%v", content.Title, len(content.ImagePaths), tags, content.ScheduleTime)
 
-	if err := submitPublish(page, content.Title, content.Content, tags, content.ScheduleTime); err != nil {
+	if err := submitPublish(page, content.Title, content.Content, tags, content.ScheduleTime, content.SaveAsDraft); err != nil {
 		return errors.Wrap(err, "小红书发布失败")
 	}
 
@@ -268,7 +269,7 @@ func waitForUploadComplete(page *rod.Page, expectedCount int) error {
 	return errors.Errorf("第%d张图片上传超时(60s)，请检查网络连接和图片大小", expectedCount)
 }
 
-func submitPublish(page *rod.Page, title, content string, tags []string, scheduleTime *time.Time) error {
+func submitPublish(page *rod.Page, title, content string, tags []string, scheduleTime *time.Time, saveAsDraft bool) error {
 	titleElem, err := page.Element("div.d-input input")
 	if err != nil {
 		return errors.Wrap(err, "查找标题输入框失败")
@@ -313,12 +314,26 @@ func submitPublish(page *rod.Page, title, content string, tags []string, schedul
 		slog.Info("定时发布设置完成", "schedule_time", scheduleTime.Format("2006-01-02 15:04"))
 	}
 
-	submitButton, err := page.Element(".publish-page-publish-btn button.bg-red")
-	if err != nil {
-		return errors.Wrap(err, "查找发布按钮失败")
-	}
-	if err := submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
-		return errors.Wrap(err, "点击发布按钮失败")
+	if saveAsDraft {
+		// 存草稿：点击非红色按钮（存草稿按钮）
+		draftButton, err := page.Element(".publish-page-publish-btn button:not(.bg-red)")
+		if err != nil {
+			return errors.Wrap(err, "查找存草稿按钮失败")
+		}
+		if err := draftButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return errors.Wrap(err, "点击存草稿按钮失败")
+		}
+		slog.Info("已点击存草稿按钮")
+	} else {
+		// 立即发布：点击红色发布按钮
+		submitButton, err := page.Element(".publish-page-publish-btn button.bg-red")
+		if err != nil {
+			return errors.Wrap(err, "查找发布按钮失败")
+		}
+		if err := submitButton.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return errors.Wrap(err, "点击发布按钮失败")
+		}
+		slog.Info("已点击发布按钮")
 	}
 
 	time.Sleep(3 * time.Second)

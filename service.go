@@ -251,7 +251,14 @@ func (s *XiaohongshuService) processImages(images []string) ([]string, error) {
 }
 
 // publishContent 执行内容发布
-func (s *XiaohongshuService) publishContent(ctx context.Context, content xiaohongshu.PublishImageContent) error {
+func (s *XiaohongshuService) publishContent(ctx context.Context, content xiaohongshu.PublishImageContent) (retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("publishContent panic recovered: %v", r)
+			retErr = fmt.Errorf("发布过程中发生内部错误: %v", r)
+		}
+	}()
+
 	b := newBrowser()
 	defer b.Close()
 
@@ -265,6 +272,39 @@ func (s *XiaohongshuService) publishContent(ctx context.Context, content xiaohon
 
 	// 执行发布
 	return action.Publish(ctx, content)
+}
+
+
+// SaveDraftContent 存草稿
+func (s *XiaohongshuService) SaveDraftContent(ctx context.Context, req *PublishRequest) (*PublishResponse, error) {
+	if xhsutil.CalcTitleLength(req.Title) > 20 {
+		return nil, fmt.Errorf("标题长度超过限制")
+	}
+
+	imagePaths, err := s.processImages(req.Images)
+	if err != nil {
+		return nil, err
+	}
+
+	content := xiaohongshu.PublishImageContent{
+		Title:       req.Title,
+		Content:     req.Content,
+		Tags:        req.Tags,
+		ImagePaths:  imagePaths,
+		SaveAsDraft: true,
+	}
+
+	if err := s.publishContent(ctx, content); err != nil {
+		logrus.Errorf("存草稿失败: title=%s %v", content.Title, err)
+		return nil, err
+	}
+
+	return &PublishResponse{
+		Title:   req.Title,
+		Content: req.Content,
+		Images:  len(imagePaths),
+		Status:  "草稿保存完成",
+	}, nil
 }
 
 // PublishVideo 发布视频（本地文件）
@@ -332,7 +372,14 @@ func (s *XiaohongshuService) PublishVideo(ctx context.Context, req *PublishVideo
 }
 
 // publishVideo 执行视频发布
-func (s *XiaohongshuService) publishVideo(ctx context.Context, content xiaohongshu.PublishVideoContent) error {
+func (s *XiaohongshuService) publishVideo(ctx context.Context, content xiaohongshu.PublishVideoContent) (retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			logrus.Errorf("publishVideo panic recovered: %v", r)
+			retErr = fmt.Errorf("视频发布过程中发生内部错误: %v", r)
+		}
+	}()
+
 	b := newBrowser()
 	defer b.Close()
 

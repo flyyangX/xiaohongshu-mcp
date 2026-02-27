@@ -755,3 +755,52 @@ func (s *AppServer) handleReplyComment(ctx context.Context, args map[string]inte
 		}},
 	}
 }
+
+// handleSaveDraftContent 处理存草稿
+func (s *AppServer) handleSaveDraftContent(ctx context.Context, args map[string]interface{}) *MCPToolResult {
+	logrus.Info("MCP: 存草稿")
+
+	title, _ := args["title"].(string)
+	body, _ := args["content"].(string)
+	imagePathsInterface, _ := args["images"].([]interface{})
+	tagsInterface, _ := args["tags"].([]interface{})
+
+	var imagePaths []string
+	for _, path := range imagePathsInterface {
+		if pathStr, ok := path.(string); ok {
+			imagePaths = append(imagePaths, pathStr)
+		}
+	}
+
+	var tags []string
+	for _, tag := range tagsInterface {
+		if tagStr, ok := tag.(string); ok {
+			tags = append(tags, tagStr)
+		}
+	}
+
+	logrus.Infof("MCP: 存草稿 - 标题: %s, 图片数量: %d, 标签数量: %d", title, len(imagePaths), len(tags))
+
+	req := &PublishRequest{
+		Title:   title,
+		Content: body,
+		Images:  imagePaths,
+		Tags:    tags,
+	}
+
+	result, err := s.xiaohongshuService.SaveDraftContent(ctx, req)
+	if err != nil {
+		return &MCPToolResult{
+			Content: []MCPContent{{Type: "text", Text: "存草稿失败: " + err.Error()}},
+			IsError: true,
+		}
+	}
+
+	return &MCPToolResult{
+		Content: []MCPContent{{
+			Type: "text",
+			Text: fmt.Sprintf("草稿保存成功: 标题=%s, 图片数=%d", result.Title, result.Images),
+		}},
+	}
+}
+
